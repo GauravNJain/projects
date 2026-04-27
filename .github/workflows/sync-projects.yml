@@ -1,0 +1,38 @@
+name: Sync Projects
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync all projects
+        run: |
+          sudo apt-get install jq -y
+
+          for row in $(jq -c '.[]' projects.json); do
+            repo=$(echo $row | jq -r '.repo')
+            output=$(echo $row | jq -r '.output')
+            title=$(echo $row | jq -r '.title')
+
+            mkdir -p "$(dirname "$output")"
+
+            echo "# $title" > "$output"
+            echo "" >> "$output"
+
+            curl -L "https://raw.githubusercontent.com/$repo/main/README.md" >> "$output"
+          done
+
+      - name: Commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add .
+          git commit -m "Sync project docs" || exit 0
+          git push
