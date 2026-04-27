@@ -1,38 +1,21 @@
-name: Sync Projects
+- name: Sync all projects
+  shell: bash
+  run: |
+    sudo apt-get update
+    sudo apt-get install -y jq
 
-on:
-  schedule:
-    - cron: '0 */6 * * *'
-  workflow_dispatch:
+    set -euo pipefail
 
-jobs:
-  sync:
-    runs-on: ubuntu-latest
+    jq -c '.[]' projects.json | while IFS= read -r row; do
+      repo=$(jq -r '.repo' <<< "$row")
+      output=$(jq -r '.output' <<< "$row")
+      title=$(jq -r '.title' <<< "$row")
 
-    steps:
-      - uses: actions/checkout@v4
+      mkdir -p "$(dirname "$output")"
 
-      - name: Sync all projects
-        run: |
-          sudo apt-get install jq -y
-
-          for row in $(jq -c '.[]' projects.json); do
-            repo=$(echo $row | jq -r '.repo')
-            output=$(echo $row | jq -r '.output')
-            title=$(echo $row | jq -r '.title')
-
-            mkdir -p "$(dirname "$output")"
-
-            echo "# $title" > "$output"
-            echo "" >> "$output"
-
-            curl -L "https://raw.githubusercontent.com/$repo/main/README.md" >> "$output"
-          done
-
-      - name: Commit
-        run: |
-          git config user.name github-actions
-          git config user.email github-actions@github.com
-          git add .
-          git commit -m "Sync project docs" || exit 0
-          git push
+      {
+        echo "# $title"
+        echo
+        curl -fsSL "https://raw.githubusercontent.com/$repo/main/README.md"
+      } > "$output"
+    done
